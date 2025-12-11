@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueschool AI Tutor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+        /* Animations */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(5%); }
+        }
+        .animate-bounce-slow { animation: bounce-slow 3s infinite; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .slide-in { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* Timer Circle Transition */
+        .timer-circle { transition: stroke-dashoffset 1s linear; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 overflow-hidden">
+
+    <!-- App Root -->
+    <div id="app" class="h-screen w-full flex flex-col"></div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Modal Container -->
+    <div id="modal-container" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-95" id="modal-content-wrapper">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 class="font-bold text-lg text-slate-800" id="modal-title">Title</h3>
+                <button onclick="closeModal()" class="p-1 rounded-full hover:bg-slate-100 text-slate-500"><i data-lucide="x"></i></button>
+            </div>
+            <div class="p-6" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- STATE MANAGEMENT ---
+        const state = {
+            session: null, // 'student' | 'institution' | null
+            activeTab: 'dashboard',
+            activeRole: 'student', // For login screen toggle
+            micActive: false,
+            videoActive: true,
+            timerActive: false,
+            timeLeft: 1500, // 25 mins
+            timerInterval: null,
+            personas: [
+                { id: 1, name: "Dr. Atlas", style: "Academic & Strict", subject: "Math & Physics", avatar: "👨‍🏫", active: true, desc: "Focuses on rigorous proofs and deep understanding. Expects precision." },
+                { id: 2, name: "Maya", style: "Friendly & Visual", subject: "Biology & Arts", avatar: "👩‍🎨", active: false, desc: "Uses lots of analogies, colorful diagrams, and a supportive tone." },
+                { id: 3, name: "Kai", style: "Gamified & Fast", subject: "Coding & Logic", avatar: "🧑‍💻", active: false, desc: "Turns learning into a speed-run challenge. High energy, quick feedback." },
+                { id: 4, name: "Professor Sarah", style: "Socratic & Patient", subject: "Literature & History", avatar: "👵", active: false, desc: "Guides you to the answer through thoughtful questions. Never rushes." },
+            ],
+            chatMessages: [{ sender: 'AI', text: "Hello Alex! Let's continue with Derivatives. Ready?" }],
+            students: Array.from({ length: 50 }, (_, i) => ({
+                id: i + 1,
+                name: `Student ${i + 1}`,
+                grade: `1${Math.floor(Math.random() * 3)}-${['A','B','C'][Math.floor(Math.random() * 3)]}`,
+                status: Math.random() > 0.7 ? 'Online' : 'Offline',
+                risk: Math.random() > 0.9 ? 'High' : Math.random() > 0.8 ? 'Medium' : 'Low',
+                mastery: Math.floor(Math.random() * 40) + 60
+            })),
+            studentPage: 1
+        };
+
+        const CONSTANTS = {
+            STUDENT_DATA: { name: "Alex Johnson", school: "St. Mary's Academy", avatar: "https://i.pravatar.cc/150?u=alex", level: "Grade 11", xp: 2450 },
+            INSTITUTION_DATA: { 
+                stats: { activeStudents: 1240, activeSessions: 85, avgMastery: 78, riskAlerts: 12 },
+                recentAlerts: [
+                    { id: 1, student: "Jordan Lee", grade: "10-B", issue: "Low engagement in Calculus", risk: "High", time: "10m ago" },
+                    { id: 2, student: "Sarah Chen", grade: "11-A", issue: "Struggling with Physics Concept", risk: "Medium", time: "25m ago" },
+                    { id: 3, student: "Mike Ross", grade: "09-C", issue: "Missed 3 consecutive sessions", risk: "High", time: "1h ago" },
+                ]
+            },
+            UPCOMING_CLASSES: [
+                { id: 1, title: "Calculus: Derivatives", time: "10:30 AM", duration: "45m", type: "Live AI" },
+                { id: 2, title: "History: The Cold War", time: "2:00 PM", duration: "30m", type: "Revision" },
+            ],
+            RECENT_MODULES: [
+                { id: 1, title: "Linear Algebra", subtitle: "Eigenvectors", progress: 75, color: "bg-blue-500", icon: "brain" },
+                { id: 2, title: "Chemistry", subtitle: "Covalent Bonds", progress: 30, color: "bg-green-500", icon: "flask-conical" },
+                { id: 3, title: "World History", subtitle: "Industrial Revolution", progress: 90, color: "bg-amber-500", icon: "globe" },
+            ],
+            LOGS_DATA: [
+                { id: 101, action: "AI Session Started", user: "Alex Johnson", time: "10:30 AM", details: "Calculus Module 4" },
+                { id: 102, action: "Risk Alert Generated", user: "System", time: "10:15 AM", details: "Mike Ross - Engagement drop" },
+                { id: 103, action: "Assignment Submitted", user: "Jessica Suits", time: "09:45 AM", details: "History Essay (A)" },
+                { id: 104, action: "Settings Changed", user: "Admin", time: "Yesterday", details: "Updated Branding Colors" },
+            ]
+        };
+
+        // --- UTILS ---
+
+        function renderIcons() {
+            lucide.createIcons();
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colorClass = type === 'success' ? 'bg-white border-green-200 text-green-700' : 
+                               type === 'error' ? 'bg-white border-red-200 text-red-700' : 
+                               'bg-slate-800 text-white border-slate-700';
+            const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+            
+            toast.className = `slide-in px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2 pointer-events-auto ${colorClass}`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span class="text-sm font-bold">${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function openModal(title, htmlContent) {
+            const container = document.getElementById('modal-container');
+            const titleEl = document.getElementById('modal-title');
+            const bodyEl = document.getElementById('modal-body');
+            
+            titleEl.textContent = title;
+            bodyEl.innerHTML = htmlContent;
+            
+            container.classList.remove('hidden');
+            renderIcons();
+        }
+
+        function closeModal() {
+            const container = document.getElementById('modal-container');
+            container.classList.add('hidden');
+        }
+
+        // --- CORE ACTIONS ---
+
+        function login(role) {
+            state.session = role;
+            state.activeTab = role === 'student' ? 'dashboard' : 'overview';
+            showToast(`Welcome to ${role === 'student' ? 'Student' : 'Institution'} Portal`, "success");
+            renderApp();
+        }
+
+        function logout() {
+            state.session = null;
+            state.activeTab = 'dashboard';
+            state.activeRole = 'student';
+            clearInterval(state.timerInterval);
+            renderApp();
+        }
+
+        function setTab(tab) {
+            state.activeTab = tab;
+            renderApp();
+        }
+
+        function toggleLoginRole(role) {
+            state.activeRole = role;
+            renderLogin();
+        }
+
+        // --- RENDERERS ---
+
+        function renderApp() {
+            const app = document.getElementById('app');
+            app.innerHTML = ''; // Clear
+
+            if (!state.session) {
+                renderLogin();
+            } else if (state.session === 'student') {
+                renderStudentApp();
+            } else {
+                renderInstitutionApp();
+            }
+            renderIcons();
+        }
+
+        // --- LOGIN VIEW ---
+
+        function renderLogin() {
+            const app = document.getElementById('app');
+            const isStudent = state.activeRole === 'student';
+            
+            app.innerHTML = `
+                <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
+                    <!-- Background Decor -->
+                    <div class="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
+                        <div class="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/5 rounded-full blur-3xl"></div>
+                        <div class="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/5 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <div class="fade-in w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row z-10 min-h-[600px]">
+                        <!-- Left Side -->
+                        <div class="md:w-1/2 bg-slate-900 p-12 text-white flex flex-col justify-between relative overflow-hidden">
+                            <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 opacity-90"></div>
+                            <div class="relative z-10">
+                                <div class="flex items-center gap-3 mb-8">
+                                    <div class="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-2xl shadow-lg">B</div>
+                                    <span class="text-3xl font-bold tracking-tight">Blueschool</span>
+                                </div>
+                                <h1 class="text-4xl font-bold leading-tight mb-6">
+                                    The Future of <br/>
+                                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">Intelligent Learning</span>
+                                </h1>
+                                <p class="text-slate-400 text-lg leading-relaxed mb-8">
+                                    Experience personalized AI tutoring that adapts to your learning style.
+                                </p>
+                                <div class="flex gap-4">
+                                    <div class="bg-white/10 backdrop-blur rounded-xl p-4 flex-1 border border-white/10">
+                                        <div class="text-2xl font-bold mb-1">98%</div>
+                                        <div class="text-xs text-slate-400 uppercase">Success Rate</div>
+                                    </div>
+                                    <div class="bg-white/10 backdrop-blur rounded-xl p-4 flex-1 border border-white/10">
+                                        <div class="text-2xl font-bold mb-1">24/7</div>
+                                        <div class="text-xs text-slate-400 uppercase">Tutor Access</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Side Form -->
+                        <div class="md:w-1/2 p-12 flex flex-col justify-center bg-slate-50/50">
+                            <div class="mb-8">
+                                <h2 class="text-2xl font-bold text-slate-800 mb-2">Welcome Back</h2>
+                                <p class="text-slate-500">Please select your portal to continue.</p>
+                            </div>
+
+                            <div class="bg-slate-200 p-1 rounded-xl flex mb-8">
+                                <button onclick="toggleLoginRole('student')" class="flex-1 py-3 rounded-lg text-sm font-bold transition-all ${isStudent ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}">Student</button>
+                                <button onclick="toggleLoginRole('institution')" class="flex-1 py-3 rounded-lg text-sm font-bold transition-all ${!isStudent ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}">Institution</button>
+                            </div>
+
+                            <form onsubmit="event.preventDefault(); login('${state.activeRole}')" class="space-y-4 mb-6">
+                                <input type="text" value="demo@blueschool.ai" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20" />
+                                <input type="password" value="password" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20" />
+                                
+                                <div class="flex justify-end">
+                                    <button type="button" onclick="showToast('Reset link sent to email', 'success')" class="text-sm font-bold text-blue-600 hover:underline">Forgot Password?</button>
+                                </div>
+
+                                <button type="submit" class="w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-[0.98] ${isStudent ? 'bg-blue-600 hover:bg-blue-700' : 'bg-indigo-900 hover:bg-indigo-800'}">
+                                    Login to ${isStudent ? 'Student Portal' : 'Admin Console'}
+                                </button>
+                            </form>
+
+                            <div class="relative mb-6">
+                                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+                                <div class="relative flex justify-center text-xs uppercase"><span class="bg-slate-50 px-2 text-slate-400">Or continue with</span></div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-8">
+                                <button type="button" onclick="showToast('Redirecting to Google...', 'neutral')" class="flex items-center justify-center gap-2 bg-white border border-slate-200 py-2.5 rounded-xl hover:bg-slate-50 font-bold text-slate-600 text-sm">
+                                    <i data-lucide="globe" class="w-4 h-4"></i> Google
+                                </button>
+                                <button type="button" onclick="showToast('Redirecting to Microsoft...', 'neutral')" class="flex items-center justify-center gap-2 bg-white border border-slate-200 py-2.5 rounded-xl hover:bg-slate-50 font-bold text-slate-600 text-sm">
+                                    <i data-lucide="shield" class="w-4 h-4"></i> Microsoft
+                                </button>
+                            </div>
+
+                            <div class="flex justify-center gap-6 text-xs text-slate-400 font-medium">
+                                <a href="#" class="hover:text-slate-600">Privacy Policy</a>
+                                <a href="#" class="hover:text-slate-600">Terms of Service</a>
+                                <a href="#" class="hover:text-slate-600">Help Center</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- STUDENT APP ---
+
+        function renderStudentApp() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+                    <!-- Sidebar -->
+                    <div class="w-20 lg:w-64 bg-white border-r border-slate-200 flex flex-col h-full shadow-xl z-20">
+                        <div class="p-6 border-b border-slate-100 flex items-center gap-3">
+                            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">B</div>
+                            <span class="hidden lg:block font-bold">Blueschool</span>
+                        </div>
+                        <nav class="flex-1 px-4 space-y-2 mt-4">
+                            ${renderNavButton('dashboard', 'Home', 'layout-dashboard')}
+                            ${renderNavButton('classroom', 'Classroom', 'video')}
+                            ${renderNavButton('study-plan', 'Planner', 'calendar')}
+                            ${renderNavButton('marketplace', 'Tutors', 'users')}
+                            ${renderNavButton('analytics', 'Progress', 'book-open')}
+                        </nav>
+                        <div class="p-4 border-t border-slate-100">
+                            <button onclick="logout()" class="w-full flex items-center gap-3 text-slate-400 hover:text-red-500 p-2 rounded-lg">
+                                <i data-lucide="log-out"></i><span class="hidden lg:inline">Log Out</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Main Content -->
+                    <div class="flex-1 flex flex-col h-screen overflow-hidden">
+                        <main class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                            ${getStudentContent()}
+                        </main>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNavButton(id, label, icon) {
+            const active = state.activeTab === id;
+            return `
+                <button onclick="setTab('${id}')" class="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${active ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'}">
+                    <i data-lucide="${icon}" class="w-5 h-5"></i>
+                    <span class="hidden lg:block font-medium">${label}</span>
+                </button>
+            `;
+        }
+
+        function getStudentContent() {
+            switch (state.activeTab) {
+                case 'dashboard': return renderStudentDashboard();
+                case 'classroom': return renderStudentClassroom();
+                case 'study-plan': return renderStudentStudyPlan();
+                case 'marketplace': return renderStudentMarketplace();
+                case 'analytics': return renderStudentProgress();
+                default: return '';
+            }
+        }
+
+        // --- Student View HTML Generators ---
+
+        function renderStudentDashboard() {
+            return `
+                <div class="max-w-7xl mx-auto space-y-8 fade-in">
+                    <!-- Hero -->
+                    <div class="relative bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-10 text-white shadow-2xl overflow-hidden">
+                        <div class="absolute right-0 top-0 w-96 h-96 bg-white/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
+                        <div class="relative z-10">
+                            <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold mb-4 border border-white/20">
+                                <i data-lucide="brain" class="w-3 h-3"></i> AI Insight Ready
+                            </div>
+                            <h2 class="text-4xl font-bold mb-3">Good Morning, Alex! ☀️</h2>
+                            <p class="text-blue-100 text-lg max-w-xl leading-relaxed mb-8">
+                                You're on a 14-day streak! Dr. Atlas recommends a quick review of <span class="font-bold text-white border-b border-blue-300 pb-0.5">Calculus</span> before your quiz tomorrow.
+                            </p>
+                            <div class="flex gap-4">
+                                <button onclick="setTab('classroom')" class="bg-white text-blue-700 px-8 py-3.5 rounded-xl font-bold hover:bg-blue-50 transition-all shadow-lg flex items-center gap-2">
+                                    <i data-lucide="play" class="w-5 h-5 fill-current"></i> Start Session
+                                </button>
+                                <button onclick="setTab('study-plan')" class="bg-blue-800/50 backdrop-blur-sm text-white px-6 py-3.5 rounded-xl font-medium hover:bg-blue-800/70 transition-colors border border-blue-500/30">View Plan</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Continue Learning -->
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="book-open" class="text-blue-600"></i> Continue Learning</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            ${CONSTANTS.RECENT_MODULES.map(mod => `
+                                <div onclick="showToast('Resuming ${mod.title}...', 'success')" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between group cursor-pointer hover:border-blue-300 transition-all hover:shadow-md">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div class="w-10 h-10 rounded-xl ${mod.color} flex items-center justify-center text-white shadow-md">
+                                            <i data-lucide="${mod.icon}"></i>
+                                        </div>
+                                        <span class="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">Module ${mod.id}</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 text-lg">${mod.title}</h4>
+                                        <p class="text-sm text-slate-500 mb-3">${mod.subtitle}</p>
+                                        <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
+                                            <div class="h-full rounded-full ${mod.color}" style="width: ${mod.progress}%"></div>
+                                        </div>
+                                        <div class="flex justify-between items-center text-xs">
+                                            <span class="font-bold text-slate-700">${mod.progress}% Complete</span>
+                                            <span class="text-blue-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Resume &rarr;</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 space-y-6">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-xl font-bold text-slate-800">Your Schedule</h3>
+                                <button class="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">View Calendar <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                            </div>
+                            <div class="grid gap-4">
+                                ${CONSTANTS.UPCOMING_CLASSES.map(cls => `
+                                    <div onclick="setTab('classroom')" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-5 group cursor-pointer hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+                                        <div class="w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-sm font-bold shadow-sm ${cls.type === 'Live AI' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}">
+                                            <span>${cls.time.split(' ')[0]}</span>
+                                            <span class="text-[10px] uppercase">${cls.time.split(' ')[1]}</span>
+                                        </div>
+                                        <div class="flex-1">
+                                            <h4 class="font-bold text-lg text-slate-800">${cls.title}</h4>
+                                            <div class="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                                                <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${cls.duration}</span>
+                                                <span class="px-2 py-0.5 bg-slate-100 rounded text-xs font-bold uppercase">${cls.type}</span>
+                                            </div>
+                                        </div>
+                                        <button class="bg-slate-100 text-slate-600 p-2 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                            <i data-lucide="video" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Side Widgets -->
+                        <div class="space-y-6">
+                            <div class="p-6 bg-gradient-to-b from-slate-900 to-slate-800 rounded-2xl border-none text-white shadow-xl">
+                                <h3 class="font-bold flex items-center gap-2 mb-4"><i data-lucide="message-square" class="w-4 h-4"></i> Quick Ask</h3>
+                                <div class="flex gap-2">
+                                    <input onkeydown="if(event.key === 'Enter') { showToast('Question sent to AI', 'success'); this.value=''; }" class="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none placeholder-slate-400" placeholder="Ask anything..." />
+                                    <button class="bg-blue-600 p-2 rounded-lg hover:bg-blue-500 transition-colors"><i data-lucide="arrow-up-right" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+
+                            <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100">
+                                <div class="flex justify-between items-start mb-3">
+                                    <h3 class="font-bold text-amber-900 flex items-center gap-2"><i data-lucide="award" class="text-amber-600 w-4 h-4"></i> Daily Quest</h3>
+                                    <span class="text-xs font-bold bg-amber-200 text-amber-800 px-2 py-1 rounded-full">500 XP</span>
+                                </div>
+                                <p class="text-sm text-amber-800 font-medium mb-1">"The Math Whiz"</p>
+                                <p class="text-xs text-amber-700/80 mb-3">Complete 3 Calculus problems with >80% accuracy.</p>
+                                <div class="w-full bg-amber-200 h-2 rounded-full overflow-hidden mb-3">
+                                    <div class="bg-amber-500 h-full rounded-full" style="width: 66%"></div>
+                                </div>
+                                <button onclick="showToast('Quest Reward Claimed!', 'success')" class="w-full py-2 bg-white border border-amber-200 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-100 transition-colors">Claim Reward</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentClassroom() {
+            // Re-render chat logic would go here in a real reactive framework, 
+            // for vanilla we'll just render current state
+            return `
+                <div class="h-[calc(100vh-100px)] flex flex-col lg:flex-row gap-6 overflow-hidden fade-in">
+                    <!-- Left: Video Feed -->
+                    <div class="w-full lg:w-1/3 flex flex-col gap-6 h-full">
+                        <div class="relative flex-1 bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-800">
+                            <!-- AI Overlay -->
+                            <div class="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs border border-white/10 shadow-lg">
+                                <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+                                <span class="font-mono uppercase tracking-wider">Listening...</span>
+                            </div>
+                            
+                            <!-- Avatar -->
+                            <div class="flex-1 flex items-center justify-center relative">
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80"></div>
+                                <div class="w-48 h-48 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-full blur-3xl opacity-20 absolute animate-pulse"></div>
+                                <div class="relative z-10 text-8xl filter drop-shadow-2xl animate-bounce-slow">👨‍🏫</div>
+                            </div>
+
+                            <!-- Emotion HUD -->
+                            <div class="absolute bottom-6 left-6 right-6">
+                                <div class="bg-white/10 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-xl">
+                                    <div class="flex justify-between items-end mb-2">
+                                        <span class="text-slate-400 text-[10px] uppercase font-bold tracking-widest">Pedagogy Engine</span>
+                                        <div class="flex gap-1">
+                                            <span class="w-1 h-3 bg-green-500 rounded-full"></span>
+                                            <span class="w-1 h-5 bg-green-500 rounded-full"></span>
+                                            <span class="w-1 h-3 bg-green-500 rounded-full"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <i data-lucide="smile" class="text-green-400 w-5 h-5"></i>
+                                        <span class="text-sm font-medium text-white">Engagement High</span>
+                                        <span class="text-xs text-slate-400 ml-auto">Confidence: 92%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    <img src="${CONSTANTS.STUDENT_DATA.avatar}" class="w-10 h-10 rounded-full border-2 border-green-500 p-0.5" />
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">You</p>
+                                    <p class="text-[10px] text-green-600 font-bold uppercase">Connected</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="toggleMic()" class="p-3 rounded-full transition-all ${state.micActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                                    <i data-lucide="${state.micActive ? 'mic' : 'mic-off'}" class="w-5 h-5"></i>
+                                </button>
+                                <button onclick="toggleVideo()" class="p-3 rounded-full transition-all ${state.videoActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                                    <i data-lucide="${state.videoActive ? 'video' : 'eye'}" class="w-5 h-5"></i>
+                                </button>
+                                <button onclick="showToast('Ending Session...', 'error')" class="p-3 rounded-full bg-red-100 text-red-500 hover:bg-red-200 hover:scale-105 transition-transform"><i data-lucide="phone-off" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Whiteboard & Chat -->
+                    <div class="w-full lg:w-2/3 bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                        <div class="h-14 border-b border-slate-100 flex items-center justify-between px-6 bg-slate-50/50">
+                            <div class="flex gap-4 text-sm font-bold text-slate-500">
+                                <button class="text-blue-600 border-b-2 border-blue-600 pb-4 -mb-4">Whiteboard</button>
+                                <button class="hover:text-slate-800 transition-colors">Shared Notes</button>
+                                <button class="hover:text-slate-800 transition-colors">Resources</button>
+                            </div>
+                            <i data-lucide="maximize" class="text-slate-400 cursor-pointer hover:text-blue-600 w-4 h-4"></i>
+                        </div>
+                        
+                        <div class="flex-1 bg-slate-50 relative p-8" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 16px 16px;">
+                            <!-- Whiteboard Content -->
+                            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-8 max-w-2xl mx-auto transform rotate-1">
+                                <h2 class="font-serif text-3xl mb-6 text-slate-800">The Chain Rule</h2>
+                                <div class="font-mono text-lg text-slate-600 bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-6">
+                                    h'(x) = f'(g(x)) * g'(x)
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                        <p class="text-xs font-bold text-blue-500 uppercase mb-1">Outer Function</p>
+                                        <p class="font-serif italic text-lg text-slate-700">f(u) = sin(u)</p>
+                                    </div>
+                                    <div class="p-4 bg-green-50 rounded-lg border border-green-100">
+                                        <p class="text-xs font-bold text-green-500 uppercase mb-1">Inner Function</p>
+                                        <p class="font-serif italic text-lg text-slate-700">u = x²</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-1/3 border-t border-slate-200 flex flex-col">
+                            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages">
+                                ${state.chatMessages.map(m => `
+                                    <div class="flex ${m.sender === 'AI' ? 'justify-start' : 'justify-end'}">
+                                        <div class="max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${m.sender === 'AI' ? 'bg-slate-100 text-slate-800 rounded-tl-none' : 'bg-blue-600 text-white rounded-tr-none'}">
+                                            <p>${m.text}</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="p-4 bg-white border-t border-slate-100 flex gap-2">
+                                <input id="chat-input" onkeydown="if(event.key === 'Enter') sendMessage()" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none" placeholder="Type a message..." />
+                                <button onclick="sendMessage()" class="bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-700 shadow-md shadow-blue-500/20"><i data-lucide="message-square" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentStudyPlan() {
+            // Simplified Planner
+            return `
+                <div class="max-w-7xl mx-auto space-y-8 fade-in">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Study Planner</h2>
+                            <p class="text-slate-500">AI-optimized schedule for maximum retention.</p>
+                        </div>
+                        <button onclick="showToast('Plan Regenerated', 'success')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-800 shadow-lg active:scale-95 transition-transform">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerate Plan
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <span class="font-bold text-slate-800">December</span>
+                            </div>
+                            <div class="grid grid-cols-7 gap-px bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                                ${['M','T','W','T','F','S','S'].map(d => `<div class="bg-slate-50 p-2 text-center text-xs font-bold text-slate-500">${d}</div>`).join('')}
+                                ${Array.from({length: 28}, (_, i) => `
+                                    <div class="bg-white min-h-[80px] p-2 hover:bg-slate-50 relative group">
+                                        <span class="text-xs font-medium text-slate-400">${i+1}</span>
+                                        ${i === 10 ? '<div class="mt-1 bg-blue-100 text-blue-700 text-[10px] font-bold p-1 rounded">Quiz</div>' : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="space-y-6">
+                            <!-- Pomodoro -->
+                            <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-lg">
+                                <h3 class="font-bold text-lg mb-4">Focus Mode</h3>
+                                <div class="flex items-center justify-center py-4">
+                                    <div class="text-4xl font-mono font-bold" id="timer-display">25:00</div>
+                                </div>
+                                <button onclick="toggleTimer()" id="timer-btn" class="w-full bg-white text-indigo-600 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">
+                                    <i data-lucide="play" class="w-4 h-4"></i> Start Focus
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentMarketplace() {
+            return `
+                <div class="max-w-7xl mx-auto fade-in">
+                    <div class="text-center mb-10">
+                        <h2 class="text-3xl font-bold text-slate-900 mb-3">Choose Your AI Mentor</h2>
+                        <p class="text-slate-500 max-w-2xl mx-auto">Select a teaching persona that matches your current learning mood.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        ${state.personas.map(tutor => `
+                            <div class="bg-white rounded-3xl p-6 border ${tutor.active ? 'border-blue-500 shadow-xl ring-2 ring-blue-500' : 'border-slate-200 shadow-sm'} transition-all">
+                                <div class="text-4xl mb-6 bg-slate-50 w-20 h-20 rounded-2xl flex items-center justify-center shadow-inner">${tutor.avatar}</div>
+                                <h3 class="text-xl font-bold text-slate-900">${tutor.name}</h3>
+                                <p class="text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">${tutor.subject}</p>
+                                <p class="text-sm text-slate-600 italic mb-6">"${tutor.desc}"</p>
+                                <button onclick="selectTutor(${tutor.id})" class="w-full py-3 rounded-xl font-bold transition-colors ${tutor.active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                                    ${tutor.active ? 'Selected' : 'Select'}
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentProgress() {
+            // Simplified progress view
+            return `
+                <div class="max-w-7xl mx-auto space-y-8 fade-in">
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row items-center gap-8">
+                        <div class="relative w-48 h-48 flex items-center justify-center border-8 border-blue-500 rounded-full text-4xl font-bold text-slate-800">82%</div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold text-slate-800">Great Progress! 🚀</h2>
+                            <p class="text-slate-500 mt-2">You're performing better than 85% of your peers.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- INSTITUTION APP ---
+
+        function renderInstitutionApp() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="flex h-screen bg-slate-100 font-sans text-slate-900">
+                    <div class="w-64 bg-slate-900 text-slate-300 flex flex-col h-full border-r border-slate-800 shadow-2xl">
+                        <div class="p-6 border-b border-slate-800/50 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">SM</div>
+                            <div><h2 class="text-white font-bold">St. Mary's</h2><p class="text-xs text-slate-400">Admin</p></div>
+                        </div>
+                        <nav class="flex-1 p-4 space-y-1">
+                            ${renderAdminNavButton('overview', 'Overview', 'activity')}
+                            ${renderAdminNavButton('students', 'Students', 'users')}
+                            ${renderAdminNavButton('analytics', 'Analytics', 'trending-up')}
+                            ${renderAdminNavButton('reports', 'Reports', 'file-text')}
+                            ${renderAdminNavButton('settings', 'Settings', 'settings')}
+                        </nav>
+                        <div class="p-4 border-t border-slate-800">
+                            <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition-all">
+                                <i data-lucide="log-out" class="w-5 h-5"></i> Log Out
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex flex-col h-screen overflow-hidden">
+                        <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm z-10">
+                            <h1 class="text-2xl font-bold text-slate-800 capitalize">${state.activeTab}</h1>
+                        </header>
+                        <main class="flex-1 overflow-y-auto custom-scrollbar">
+                            ${getInstitutionContent()}
+                        </main>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdminNavButton(id, label, icon) {
+            const active = state.activeTab === id;
+            return `
+                <button onclick="setTab('${id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 hover:text-white'}">
+                    <i data-lucide="${icon}" class="w-5 h-5"></i>
+                    <span class="font-medium text-sm">${label}</span>
+                </button>
+            `;
+        }
+
+        function getInstitutionContent() {
+            switch(state.activeTab) {
+                case 'overview': return renderInstitutionOverview();
+                case 'students': return renderInstitutionDirectory();
+                case 'analytics': return renderInstitutionAnalytics();
+                case 'reports': return renderInstitutionReports();
+                case 'settings': return renderInstitutionSettings();
+                default: return '';
+            }
+        }
+
+        // --- Institution View HTML Generators ---
+
+        function renderInstitutionOverview() {
+            return `
+                <div class="p-8 max-w-[1600px] mx-auto space-y-8 fade-in">
+                    <!-- Top Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-blue-50 text-blue-500"><i data-lucide="users"></i></div>
+                            <div><p class="text-sm font-medium text-slate-500">Active Students</p><h3 class="text-2xl font-bold text-slate-800">1,240</h3></div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-amber-50 text-amber-500"><i data-lucide="zap"></i></div>
+                            <div><p class="text-sm font-medium text-slate-500">Live Sessions</p><h3 class="text-2xl font-bold text-slate-800">85</h3></div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-green-50 text-green-500"><i data-lucide="award"></i></div>
+                            <div><p class="text-sm font-medium text-slate-500">Avg Mastery</p><h3 class="text-2xl font-bold text-slate-800">78%</h3></div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-red-50 text-red-500"><i data-lucide="alert-circle"></i></div>
+                            <div><p class="text-sm font-medium text-slate-500">Risk Alerts</p><h3 class="text-2xl font-bold text-slate-800">12</h3></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- Engagement Chart (Mock) -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-[400px] flex flex-col">
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2"><i data-lucide="activity" class="text-indigo-500"></i> Real-Time Engagement</h3>
+                                <div class="flex-1 flex items-end justify-between gap-2 px-4 pb-4 border-b border-slate-100 mt-4">
+                                    ${[40, 65, 45, 80, 55, 90, 70, 85, 60, 75, 50, 65].map(h => `
+                                        <div class="w-full bg-slate-100 rounded-t-lg relative group h-full flex items-end overflow-hidden">
+                                            <div class="w-full bg-gradient-to-t from-indigo-600 to-blue-500 rounded-t-md opacity-80 group-hover:opacity-100 transition-opacity" style="height: ${h}%"></div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Alerts -->
+                        <div class="space-y-6">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="p-4 border-b border-slate-100 bg-red-50/50 flex justify-between items-center">
+                                    <h3 class="font-bold text-red-900 flex items-center gap-2"><i data-lucide="alert-circle"></i> At-Risk Students</h3>
+                                    <span class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">3 New</span>
+                                </div>
+                                <div class="divide-y divide-slate-100">
+                                    ${CONSTANTS.INSTITUTION_DATA.recentAlerts.map(alert => `
+                                        <div class="p-4 hover:bg-slate-50 transition-colors">
+                                            <div class="flex justify-between items-start mb-1">
+                                                <span class="font-bold text-slate-800">${alert.student}</span>
+                                                <span class="text-xs text-slate-400">${alert.time}</span>
+                                            </div>
+                                            <div class="text-xs text-slate-500 mb-2">${alert.grade} • ${alert.issue}</div>
+                                            <button onclick="showToast('Contacting Parent...', 'success')" class="text-[10px] font-bold bg-white border border-slate-200 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600">Contact</button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderInstitutionDirectory() {
+            const startIdx = (state.studentPage - 1) * 7;
+            const currentStudents = state.students.slice(startIdx, startIdx + 7);
+            
+            return `
+                <div class="p-8 max-w-[1600px] mx-auto fade-in">
+                    <div class="flex justify-between items-center mb-8">
+                        <h2 class="text-2xl font-bold text-slate-800">Student Directory</h2>
+                        <div class="flex gap-3">
+                            <button onclick="openAddStudentModal()" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-lg">
+                                <i data-lucide="plus"></i> Add Student
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase">Student</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase">Grade</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase">Mastery</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${currentStudents.map(s => `
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-6 py-4 font-bold text-slate-800">${s.name}</td>
+                                        <td class="px-6 py-4 text-sm text-slate-600">${s.grade}</td>
+                                        <td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${s.status === 'Online' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}">${s.status}</span></td>
+                                        <td class="px-6 py-4"><div class="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden"><div class="bg-indigo-500 h-full" style="width: ${s.mastery}%"></div></div></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div class="px-6 py-4 border-t border-slate-200 flex justify-between items-center text-sm text-slate-500">
+                            <span>Page ${state.studentPage}</span>
+                            <div class="flex gap-2">
+                                <button onclick="if(state.studentPage > 1) { state.studentPage--; renderApp(); }" class="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50">Prev</button>
+                                <button onclick="if(state.studentPage < 7) { state.studentPage++; renderApp(); }" class="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50">Next</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderInstitutionAnalytics() {
+            return `<div class="p-10 text-center fade-in"><h2 class="text-2xl font-bold">Analytics Dashboard</h2><p class="text-slate-500 mt-2">Comprehensive charts view loaded.</p></div>`;
+        }
+
+        function renderInstitutionReports() {
+            return `
+                <div class="p-8 max-w-[1600px] mx-auto fade-in">
+                    <div class="flex justify-between items-center mb-8">
+                        <h2 class="text-2xl font-bold text-slate-800">System Logs</h2>
+                        <button onclick="showToast('Downloading CSV...', 'success')" class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg font-bold"><i data-lucide="download"></i> Export</button>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        ${CONSTANTS.LOGS_DATA.map(log => `
+                            <div class="p-4 border-b border-slate-100 last:border-none flex items-center justify-between hover:bg-slate-50">
+                                <div><p class="font-bold text-slate-800 text-sm">${log.action}</p><p class="text-xs text-slate-500">${log.user} • ${log.details}</p></div>
+                                <span class="text-xs font-mono text-slate-400">${log.time}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderInstitutionSettings() {
+            return `
+                <div class="p-8 max-w-4xl mx-auto space-y-8 fade-in">
+                    <h2 class="text-2xl font-bold text-slate-800">Configuration</h2>
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+                        <h3 class="font-bold text-slate-800 mb-6 flex items-center gap-2 pb-4 border-b border-slate-100"><i data-lucide="palette"></i> Branding</h3>
+                        <div class="grid grid-cols-2 gap-6">
+                            <div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">School Name</label><input value="St. Mary's Academy" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 font-medium" /></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-4">
+                        <button onclick="showToast('Saved', 'success')" class="px-6 py-3 rounded-xl font-bold bg-slate-900 text-white hover:bg-slate-800 shadow-lg">Save Changes</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- INTERACTIVE ACTIONS ---
+
+        function toggleMic() {
+            state.micActive = !state.micActive;
+            showToast(state.micActive ? "Microphone Active" : "Microphone Muted", "neutral");
+            renderApp();
+        }
+
+        function toggleVideo() {
+            state.videoActive = !state.videoActive;
+            showToast(state.videoActive ? "Camera On" : "Camera Off", "neutral");
+            renderApp();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            state.chatMessages.push({ sender: 'Me', text });
+            input.value = '';
+            renderApp(); // In vanilla we re-render, optimal would be appendChild
+            
+            // Sim AI Response
+            setTimeout(() => {
+                state.chatMessages.push({ sender: 'AI', text: "That's a great observation! Let's update the graph." });
+                renderApp();
+            }, 1000);
+        }
+
+        function toggleTimer() {
+            state.timerActive = !state.timerActive;
+            const btn = document.getElementById('timer-btn');
+            
+            if (state.timerActive) {
+                btn.innerHTML = `<i data-lucide="pause" class="w-4 h-4"></i> Pause Focus`;
+                state.timerInterval = setInterval(() => {
+                    if (state.timeLeft > 0) {
+                        state.timeLeft--;
+                        const mins = Math.floor(state.timeLeft / 60);
+                        const secs = state.timeLeft % 60;
+                        document.getElementById('timer-display').innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                    } else {
+                        toggleTimer();
+                        showToast("Session Complete!", "success");
+                    }
+                }, 1000);
+            } else {
+                btn.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i> Start Focus`;
+                clearInterval(state.timerInterval);
+            }
+            renderIcons();
+        }
+
+        function selectTutor(id) {
+            state.personas.forEach(p => p.active = p.id === id);
+            showToast("Tutor Persona Updated", "success");
+            renderApp();
+        }
+
+        function openAddStudentModal() {
+            openModal("Add Student", `
+                <div class="space-y-4">
+                    <div><label class="text-xs font-bold text-slate-500">Full Name</label><input class="w-full border p-2 rounded-lg" /></div>
+                    <div><label class="text-xs font-bold text-slate-500">Grade</label><input class="w-full border p-2 rounded-lg" /></div>
+                    <button onclick="closeModal(); showToast('Student Added', 'success')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold">Create Profile</button>
+                </div>
+            `);
+        }
+
+        // --- INIT ---
+        renderApp();
+
+    </script>
+</body>
+</html>
