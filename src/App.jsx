@@ -22,7 +22,7 @@ const MODEL_TTS = "gemini-2.5-flash-preview-tts";
 
 const GENARTML_MODEL_TURBO = "eleven_turbo_v2_5"; 
 // Indian Female Voice ID (Monika/Rachel)
-const DEFAULT_GENARTML_VOICE_ID = "1qEiC6qsybMkmnNdVMbK"; 
+const DEFAULT_GENARTML_VOICE_ID = "LQ2auZHpAQ9h4azztqMT"; 
 
 // --- INTELLIGENT SYSTEM PROMPT (REKHA - DISHTV) ---
 const REKHA_BRAIN = `
