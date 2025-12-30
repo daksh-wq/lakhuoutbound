@@ -2,17 +2,29 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Phone, PhoneOff, Activity, Volume2, X, Key, AlertCircle, ShieldCheck, FileText, Zap, Globe, Sliders } from 'lucide-react';
 
 // --- GenArtML Configuration ---
-const DEFAULT_GENARTML_SERVER_KEY = "AIzaSyCZgDljgmh0dv5SzOpYqarO0V36lZc3hjM"; 
-const DEFAULT_GENARTML_PASS = "sk_1bc5a2cc9662a0229f34b1705e451342b511e4d9810e70d6"; 
+// KEYS ARE HIDDEN: Loaded from Vercel/Vite Environment Variables
+// Added fallback to empty string to prevent build errors if import.meta is not available in some environments
+let ENV_SERVER_KEY = "";
+let ENV_PASS_KEY = "";
+
+try {
+  // Safe access to import.meta.env
+  if (import.meta && import.meta.env) {
+    ENV_SERVER_KEY = import.meta.env.VITE_GENARTML_SERVER_KEY || "";
+    ENV_PASS_KEY = import.meta.env.VITE_GENARTML_PASS || "";
+  }
+} catch (e) {
+  console.warn("Environment variables not loaded via import.meta");
+}
 
 const MODEL_TEXT = "gemini-2.5-flash-preview-09-2025";
 const MODEL_TTS = "gemini-2.5-flash-preview-tts";
 
 const GENARTML_MODEL_TURBO = "eleven_turbo_v2_5"; 
-// Indian Male Voice ID
+// Indian Female Voice ID (Monika/Rachel)
 const DEFAULT_GENARTML_VOICE_ID = "1qEiC6qsybMkmnNdVMbK"; 
 
-// --- INTELLIGENT SYSTEM PROMPT (STRICT HINDI/GUJARATI ONLY) ---
+// --- INTELLIGENT SYSTEM PROMPT (REKHA - DISHTV) ---
 const REKHA_BRAIN = `
 SYSTEM IDENTITY:
 You are "Rekha", a senior retention specialist at "Lakhu Teleservices" (an authorized partner of DishTV).
@@ -21,17 +33,16 @@ You are making an OUTBOUND CALL to a valued customer whose subscription has just
 CORE OBJECTIVE:
 Convince the customer to recharge their DishTV set-top box TODAY with the minimum amount.
 
-*** CRITICAL LANGUAGE RULES (NON-NEGOTIABLE) ***
-1. **NO ENGLISH OUTPUT:** You must NEVER speak a full sentence in English. Even if the user speaks English, reply in Hindi.
-2. **DEFAULT LANGUAGE:** HINDI (Standard, polite Indian accent).
-3. **SWITCHING:** IF and ONLY IF the customer speaks Gujarati -> Switch to Gujarati.
-4. **PRONUNCIATION:** Write currency as "Rupees" (full spelling), never "Rs".
-5. **ENGLISH REQUESTS:** If user asks "Speak in English", reply in Hindi: "Maaf kijiye, main sirf Hindi aur Gujarati mein baat kar sakti hoon."
+LANGUAGE RULES (STRICT):
+1. **DEFAULT:** HINDI (Standard, polite Indian accent).
+2. **SWITCHING:** IF and ONLY IF the customer speaks Gujarati -> Switch to Gujarati.
+3. **PRONUNCIATION:** Always write currency as "Rupees" (full spelling), never "Rs".
+4. **TONE:** Warm, professional, persistent.
 
 KNOWLEDGE BASE:
 - Minimum Recharge: 200 Rupees.
-- Offers: NO offers available. Do not mention free days.
-- Consequence: Service disconnects tonight. Re-connection is hassling.
+- Offers: NO offers available. Do not mention free days or discounts.
+- Consequence: Service disconnects tonight. Re-connection fee is 200 Rupees.
 - Popular Content: Anupama, Tarak Mehta, Cricket.
 
 FLOW:
@@ -122,9 +133,9 @@ export default function App() {
   const [caption, setCaption] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   
-  // Keys (Obfuscated)
-  const [genartmlServerKey, setGenartmlServerKey] = useState(DEFAULT_GENARTML_SERVER_KEY);
-  const [genartmlPass, setGenartmlPass] = useState(DEFAULT_GENARTML_PASS); 
+  // Keys (From ENV or User Input)
+  const [genartmlServerKey, setGenartmlServerKey] = useState(ENV_SERVER_KEY);
+  const [genartmlPass, setGenartmlPass] = useState(ENV_PASS_KEY); 
   
   // Voice Settings (Obfuscated)
   const [genartmlVoiceId, setGenartmlVoiceId] = useState(DEFAULT_GENARTML_VOICE_ID);
@@ -186,32 +197,6 @@ export default function App() {
     return aiText.replace(/[*_]/g, '').trim(); 
   };
 
-  // Helper for Standard TTS (Fallback)
-  const generateStandardTTS = async (text) => {
-      const ttsPayload = {
-          contents: [{ parts: [{ text: text }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
-          }
-      };
-      const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(ttsPayload)
-          }
-      );
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      
-      const binaryString = window.atob(data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-      return pcmToWav(bytes.buffer, 24000);
-  };
-
   const generateSpeech = async (text) => {
     const cacheKey = `${text}-${genartmlVoiceId}-${voiceStability}`;
     if (audioCacheRef.current.has(cacheKey)) {
@@ -220,39 +205,53 @@ export default function App() {
 
     let audioBlob;
 
-    // Try High Quality First (GenArtML Turbo)
     if (genartmlPass && genartmlPass.length > 10) {
-        try {
-            const response = await fetch(
-                `https://api.elevenlabs.io/v1/text-to-speech/${genartmlVoiceId}?optimize_streaming_latency=4`, 
-                {
-                    method: 'POST',
-                    headers: {
-                        'xi-api-key': genartmlPass,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        text: text,
-                        model_id: GENARTML_MODEL_TURBO,
-                        voice_settings: { 
-                            stability: voiceStability, 
-                            similarity_boost: voiceSimilarity 
-                        }
-                    })
-                }
-            );
-            if (!response.ok) {
-                 throw new Error("GenArtML Voice Error");
+        // GenArtML Turbo (External)
+        const response = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${genartmlVoiceId}?optimize_streaming_latency=4`, 
+            {
+                method: 'POST',
+                headers: {
+                    'xi-api-key': genartmlPass,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text,
+                    model_id: GENARTML_MODEL_TURBO,
+                    voice_settings: { 
+                        stability: voiceStability, 
+                        similarity_boost: voiceSimilarity 
+                    }
+                })
             }
-            audioBlob = await response.blob();
-        } catch (e) {
-            console.warn("High Quality Voice Failed (Quota/Network). Switching to Backup.");
-            // Auto-Fallback to Standard
-            audioBlob = await generateStandardTTS(text);
+        );
+        if (!response.ok) {
+             console.error("GenArtML Voice Failed, switching to backup.");
+             throw new Error("GenArtML Voice Error");
         }
+        audioBlob = await response.blob();
     } else {
-        // Direct Standard
-        audioBlob = await generateStandardTTS(text);
+        // GenArtML Standard (Internal)
+        const ttsPayload = {
+          contents: [{ parts: [{ text: text }] }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
+          }
+        };
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ttsPayload)
+          }
+        );
+        const data = await response.json();
+        const binaryString = window.atob(data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        audioBlob = pcmToWav(bytes.buffer, 24000);
     }
 
     audioCacheRef.current.set(cacheKey, audioBlob);
@@ -375,11 +374,15 @@ export default function App() {
       }
     } catch (e) {
       console.error(e);
-      // Don't show error to user immediately, try to recover or just reset state
-      if (callActiveRef.current) {
-          setState('listening');
-          try { recognitionRef.current.start(); } catch(err){}
-      }
+      setState('error');
+      setCaption(`Error: ${e.message}`);
+      // Retry listening if audio fails
+      setTimeout(() => {
+         if (callActiveRef.current) {
+             setState('listening');
+             try { recognitionRef.current.start(); } catch(err){}
+         }
+      }, 3000);
     }
   };
 
@@ -406,6 +409,7 @@ export default function App() {
                     onChange={(e) => setGenartmlServerKey(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-yellow-500 outline-none font-mono" 
                  />
+                 <p className="text-[10px] text-slate-500">Loaded from Env if available.</p>
               </div>
 
               <div className="space-y-2">
@@ -418,6 +422,7 @@ export default function App() {
                     onChange={(e) => setGenartmlPass(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono" 
                  />
+                 <p className="text-[10px] text-slate-500">Auto-loaded from Env if available.</p>
               </div>
 
               <div className="space-y-4 pt-4 border-t border-slate-700">
