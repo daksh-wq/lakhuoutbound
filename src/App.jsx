@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Phone, PhoneOff, Activity, Volume2, X, Key, AlertCircle, ShieldCheck, FileText, Zap, Globe, Sliders } from 'lucide-react';
 
 // --- GenArtML Configuration ---
-const DEFAULT_GENARTML_SERVER_KEY = "AIzaSyD9rILxhtD6K-eXcGk1yNzq8-ojDROUhNI"; 
+const DEFAULT_GENARTML_SERVER_KEY = "AIzaSyCZgDljgmh0dv5SzOpYqarO0V36lZc3hjM"; 
 const DEFAULT_GENARTML_PASS = "sk_1bc5a2cc9662a0229f34b1705e451342b511e4d9810e70d6"; 
 
 const MODEL_TEXT = "gemini-2.5-flash-preview-09-2025";
