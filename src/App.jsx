@@ -3,57 +3,69 @@ import { Settings, Phone, PhoneOff, Activity, Volume2, X, Key, AlertCircle, Shie
 
 // --- GenArtML Configuration ---
 // KEYS ARE HIDDEN: Loaded from Vercel/Vite Environment Variables
-// Added fallback to empty string to prevent build errors if import.meta is not available in some environments
 let ENV_SERVER_KEY = "";
 let ENV_PASS_KEY = "";
 
 try {
-  // Safe access to import.meta.env
   if (import.meta && import.meta.env) {
     ENV_SERVER_KEY = import.meta.env.VITE_GENARTML_SERVER_KEY || "";
     ENV_PASS_KEY = import.meta.env.VITE_GENARTML_PASS || "";
   }
 } catch (e) {
-  console.warn("Environment variables not loaded via import.meta");
+  console.warn("Env vars not loaded");
 }
 
 const MODEL_TEXT = "gemini-2.5-flash-preview-09-2025";
 const MODEL_TTS = "gemini-2.5-flash-preview-tts";
-
 const GENARTML_MODEL_TURBO = "eleven_turbo_v2_5"; 
-// Indian Female Voice ID (Monika/Rachel)
 const DEFAULT_GENARTML_VOICE_ID = "LQ2auZHpAQ9h4azztqMT"; 
 
-// --- INTELLIGENT SYSTEM PROMPT (REKHA - DISHTV) ---
+// --- INTELLIGENT SYSTEM PROMPT (WALLED GARDEN) ---
 const REKHA_BRAIN = `
 SYSTEM IDENTITY:
-You are "Rekha", a senior retention specialist at "Lakhu Teleservices" (an authorized partner of DishTV).
-You are making an OUTBOUND CALL to a valued customer whose subscription has just expired.
+You are "Rekha", a senior retention specialist at "Lakhu Teleservices" (DishTV Partner).
 
-CORE OBJECTIVE:
-Convince the customer to recharge their DishTV set-top box TODAY with the minimum amount.
+CORE DIRECTIVE: "THE WALL"
+You are an intelligent AI that understands natural language, BUT you are strictly confined to the information and phrasing within the "APPROVED SCRIPT" below.
+- You CAN understand synonyms (e.g., if user says "I am broke", you understand it as "NO MONEY").
+- You CANNOT invent offers, discounts, or new topics.
+- You CANNOT give personal advice or chat about other things.
+- You MUST reply using the phrasing and tone defined in the script sections.
 
-LANGUAGE RULES (STRICT):
-1. **DEFAULT:** HINDI (Standard, polite Indian accent).
-2. **SWITCHING:** IF and ONLY IF the customer speaks Gujarati -> Switch to Gujarati.
-3. **PRONUNCIATION:** Always write currency as "Rupees" (full spelling), never "Rs".
-4. **TONE:** Warm, professional, persistent.
+*** APPROVED SCRIPT KNOWLEDGE BASE ***
 
-KNOWLEDGE BASE:
-- Minimum Recharge: 200 Rupees.
-- Offers: NO offers available. Do not mention free days or discounts.
-- Consequence: Service disconnects tonight. Re-connection fee is 200 Rupees.
-- Popular Content: Anupama, Tarak Mehta, Cricket.
+1. **OPENING (Always start here):**
+   "Namaste, main Rekha hoon Lakhu Teleservices se. Aapka DishTV subscription expire ho gaya hai. Kya aap aaj 200 Rupees ka renew karvana chahenge?"
 
-FLOW:
-1. OPENER: "Namaste, main Rekha hoon, Lakhu Teleservices se. Aapka DishTV subscription expire ho gaya hai. Kya aap aaj 200 Rupees ka renew karvana chahenge?"
-2. HANDLING OBJECTIONS:
-   - IF "NO MONEY": "Samajh sakti hoon. Par sir, 200 Rupees mein aapka manoranjan chalu rahega. Aaj kar lein?"
-   - IF "BUSY": "Bas ek minute lagega. Aaj aakhri din hai connection chalu rakhne ka."
-   - IF "SWITCHING": "Arre! DishTV jaisi quality aur kahin nahi milegi. 200 Rupees mein sab chalu rahega."
-3. CLOSE: If Yes -> "Link bhej diya hai, shukriya." If No -> "Theek hai, dhanyavaad."
+2. **OBJECTION: NO MONEY / EXPENSIVE**
+   (User says: "Paise nahi hai", "Mehnga hai", "Salary nahi aayi")
+   -> YOUR REPLY: "Samajh sakti hoon. Par sir/madam, 200 Rupees mein aapka poore mahine ka manoranjan chalu rahega. Aaj kar lein?"
 
-STRICT: Keep responses SHORT (under 20 words). Never admit to being AI.
+3. **OBJECTION: BUSY / CALL LATER**
+   (User says: "Baad mein karna", "Abhi busy hoon", "Kal karunga")
+   -> YOUR REPLY: "Bas ek minute lagega. Aaj aakhri din hai connection chalu rakhne ka. Kal se 200 Rupees extra lagenge re-connection ke liye."
+
+4. **OBJECTION: COMPETITOR / SWITCHING**
+   (User says: "Jio le liya", "Airtel lagwaunga", "DishTV bekar hai")
+   -> YOUR REPLY: "Arre! DishTV jaisi picture quality aur kahin nahi milegi. Sirf 200 Rupees ki baat hai, ek baar soch lijiye."
+
+5. **TECHNICAL ISSUE**
+   (User says: "Signal nahi aa raha", "Box kharab hai")
+   -> YOUR REPLY: "Dukh hua sunkar. Main aapki shikayat 'Priority' par note kar rahi hoon. Technician jaldi aayega. Par account active rakhne ke liye recharge zaruri hai."
+
+6. **CLOSING (AGREEMENT)**
+   (User says: "Theek hai", "Bhejo link", "Haan kar do")
+   -> YOUR REPLY: "Shukriya! Maine payment link SMS kar diya hai. Aapka din shubh rahe." (STOP SPEAKING AFTER THIS)
+
+7. **CLOSING (REFUSAL)**
+   (User says: "Nahi karna", "Phone kato", "Dont call me")
+   -> YOUR REPLY: "Theek hai, koi baat nahi. Dhanyavaad." (STOP SPEAKING AFTER THIS)
+
+*** RULES ***
+- Default Language: HINDI.
+- If User speaks Gujarati: Switch to Gujarati translation of the above lines.
+- Pronounce "Rupees" clearly.
+- No Offers: Minimum is 200 Rupees. No free days.
 `;
 
 // --- Audio Utilities ---
@@ -94,7 +106,6 @@ const writeString = (view, offset, string) => {
 };
 
 // --- Components ---
-
 const GlowingOrb = ({ state, engine }) => {
   const getColors = () => {
     switch(state) {
@@ -106,20 +117,10 @@ const GlowingOrb = ({ state, engine }) => {
     }
   };
 
-  const getAnimation = () => {
-    switch(state) {
-      case 'listening': return 'scale-110 animate-pulse';
-      case 'processing': return 'animate-spin duration-[1s]';
-      case 'speaking': return 'scale-125 animate-bounce duration-[600ms]'; 
-      case 'error': return 'shake';
-      default: return 'scale-100';
-    }
-  };
-
   return (
     <div className="relative flex justify-center items-center">
         <div className={`absolute w-72 h-72 rounded-full bg-gradient-to-br opacity-20 blur-3xl transition-all duration-300 ${getColors()}`}></div>
-        <div className={`w-32 h-32 rounded-full bg-gradient-to-br shadow-2xl transition-all duration-300 ease-in-out z-10 ${getColors()} ${getAnimation()}`}></div>
+        <div className={`w-32 h-32 rounded-full bg-gradient-to-br shadow-2xl transition-all duration-300 ease-in-out z-10 ${getColors()} ${state === 'listening' ? 'scale-110 animate-pulse' : ''}`}></div>
         <div className="absolute -bottom-24 w-full text-center tracking-widest text-sm font-bold text-slate-400 uppercase animate-pulse">
            {state === 'idle' ? 'Ready' : state}
         </div>
@@ -133,11 +134,11 @@ export default function App() {
   const [caption, setCaption] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   
-  // Keys (From ENV or User Input)
+  // Keys
   const [genartmlServerKey, setGenartmlServerKey] = useState(ENV_SERVER_KEY);
   const [genartmlPass, setGenartmlPass] = useState(ENV_PASS_KEY); 
   
-  // Voice Settings (Obfuscated)
+  // Settings
   const [genartmlVoiceId, setGenartmlVoiceId] = useState(DEFAULT_GENARTML_VOICE_ID);
   const [voiceStability, setVoiceStability] = useState(0.4); 
   const [voiceSimilarity, setVoiceSimilarity] = useState(0.8);
@@ -150,7 +151,6 @@ export default function App() {
   const messagesRef = useRef([]); 
   const audioCacheRef = useRef(new Map());
   
-  // State Refs
   const callActiveRef = useRef(false);
   const stateRef = useRef('idle');
 
@@ -158,14 +158,13 @@ export default function App() {
 
   const unlockAudioContext = () => {
     if (audioRef.current) {
-      audioRef.current.play().catch(e => console.warn("Audio unlock:", e));
+      audioRef.current.play().catch(() => {});
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
   };
 
   // --- API Functions ---
-
   const generateResponse = async (textInput, history) => {
     if (!genartmlServerKey) throw new Error("GenArtML Server Key Missing");
 
@@ -206,52 +205,47 @@ export default function App() {
     let audioBlob;
 
     if (genartmlPass && genartmlPass.length > 10) {
-        // GenArtML Turbo (External)
-        const response = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/${genartmlVoiceId}?optimize_streaming_latency=4`, 
-            {
-                method: 'POST',
-                headers: {
-                    'xi-api-key': genartmlPass,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text: text,
-                    model_id: GENARTML_MODEL_TURBO,
-                    voice_settings: { 
-                        stability: voiceStability, 
-                        similarity_boost: voiceSimilarity 
-                    }
-                })
-            }
-        );
-        if (!response.ok) {
-             console.error("GenArtML Voice Failed, switching to backup.");
-             throw new Error("GenArtML Voice Error");
+        // GenArtML Turbo
+        try {
+            const response = await fetch(
+                `https://api.elevenlabs.io/v1/text-to-speech/${genartmlVoiceId}?optimize_streaming_latency=4`, 
+                {
+                    method: 'POST',
+                    headers: { 'xi-api-key': genartmlPass, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: GENARTML_MODEL_TURBO,
+                        voice_settings: { stability: voiceStability, similarity_boost: voiceSimilarity }
+                    })
+                }
+            );
+            if (!response.ok) throw new Error("Voice Error");
+            audioBlob = await response.blob();
+        } catch(e) {
+            // Fallback to Standard
+             const ttsPayload = {
+                contents: [{ parts: [{ text: text }] }],
+                generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } }
+            };
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`, {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ttsPayload)
+            });
+            const d = await res.json();
+            const b = Uint8Array.from(atob(d.candidates[0].content.parts[0].inlineData.data), c => c.charCodeAt(0));
+            audioBlob = pcmToWav(b.buffer, 24000);
         }
-        audioBlob = await response.blob();
     } else {
-        // GenArtML Standard (Internal)
-        const ttsPayload = {
-          contents: [{ parts: [{ text: text }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
-          }
+        // Standard Fallback
+         const ttsPayload = {
+            contents: [{ parts: [{ text: text }] }],
+            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } }
         };
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(ttsPayload)
-          }
-        );
-        const data = await response.json();
-        const binaryString = window.atob(data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        audioBlob = pcmToWav(bytes.buffer, 24000);
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ttsPayload)
+        });
+        const d = await res.json();
+        const b = Uint8Array.from(atob(d.candidates[0].content.parts[0].inlineData.data), c => c.charCodeAt(0));
+        audioBlob = pcmToWav(b.buffer, 24000);
     }
 
     audioCacheRef.current.set(cacheKey, audioBlob);
@@ -284,10 +278,9 @@ export default function App() {
         if (text) {
            setCaption(`"${text}"`);
            currentTranscriptRef.current = text;
-           // Wait 1s silence to confirm end of speech
            silenceTimer.current = setTimeout(() => {
                if (recognitionRef.current) recognitionRef.current.stop();
-           }, 1000);
+           }, 800); // 0.8s Silence Threshold
         }
       };
 
@@ -350,7 +343,6 @@ export default function App() {
 
       const responseText = await generateResponse(text, messagesRef.current);
       
-      // Update history before audio so we have context
       messagesRef.current = [...messagesRef.current, { role: "model", parts: [{ text: responseText }] }];
       
       const audioBlob = await generateSpeech(responseText);
@@ -376,7 +368,6 @@ export default function App() {
       console.error(e);
       setState('error');
       setCaption(`Error: ${e.message}`);
-      // Retry listening if audio fails
       setTimeout(() => {
          if (callActiveRef.current) {
              setState('listening');
@@ -403,28 +394,14 @@ export default function App() {
                  <label className="text-sm text-yellow-400 font-bold uppercase flex items-center gap-2">
                     <Key className="w-4 h-4"/> GenArtML Server Key
                  </label>
-                 <input 
-                    type="password"
-                    value={genartmlServerKey}
-                    onChange={(e) => setGenartmlServerKey(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-yellow-500 outline-none font-mono" 
-                 />
-                 <p className="text-[10px] text-slate-500">Loaded from Env if available.</p>
+                 <input type="password" value={genartmlServerKey} onChange={(e) => setGenartmlServerKey(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-yellow-500 outline-none font-mono" />
               </div>
-
               <div className="space-y-2">
                  <label className="text-sm text-orange-400 font-bold uppercase flex items-center gap-2">
                     <Zap className="w-4 h-4"/> GenArtML Pass
                  </label>
-                 <input 
-                    type="password"
-                    value={genartmlPass}
-                    onChange={(e) => setGenartmlPass(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono" 
-                 />
-                 <p className="text-[10px] text-slate-500">Auto-loaded from Env if available.</p>
+                 <input type="password" value={genartmlPass} onChange={(e) => setGenartmlPass(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono" />
               </div>
-
               <div className="space-y-4 pt-4 border-t border-slate-700">
                  <div className="flex items-center gap-2 text-emerald-400 mb-2">
                     <Sliders className="w-4 h-4" />
@@ -432,12 +409,7 @@ export default function App() {
                  </div>
                  <div className="space-y-1">
                     <label className="text-xs text-slate-400">GenArtML Voice ID</label>
-                    <input 
-                        type="text"
-                        value={genartmlVoiceId}
-                        onChange={(e) => setGenartmlVoiceId(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none font-mono"
-                    />
+                    <input type="text" value={genartmlVoiceId} onChange={(e) => setGenartmlVoiceId(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none font-mono"/>
                  </div>
                  <div className="space-y-1">
                     <div className="flex justify-between text-xs text-slate-400"><span>Stability</span><span>{voiceStability}</span></div>
@@ -448,16 +420,11 @@ export default function App() {
                     <input type="range" min="0" max="1" step="0.05" value={voiceSimilarity} onChange={(e) => setVoiceSimilarity(parseFloat(e.target.value))} className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"/>
                  </div>
               </div>
-
               <div className="space-y-2 pt-4 border-t border-slate-700">
                  <label className="text-sm text-blue-400 font-bold uppercase flex items-center gap-2">
                     <Globe className="w-4 h-4"/> Input Language
                  </label>
-                 <select 
-                    value={inputLang} 
-                    onChange={(e) => setInputLang(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-                 >
+                 <select value={inputLang} onChange={(e) => setInputLang(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none" >
                     <option value="hi-IN">Hindi (hi-IN)</option>
                     <option value="gu-IN">Gujarati (gu-IN)</option>
                     <option value="en-IN">English (en-IN)</option>
