@@ -18,54 +18,51 @@ try {
 const MODEL_TEXT = "gemini-2.5-flash-preview-09-2025";
 const MODEL_TTS = "gemini-2.5-flash-preview-tts";
 const GENARTML_MODEL_TURBO = "eleven_turbo_v2_5"; 
-const DEFAULT_GENARTML_VOICE_ID = "LQ2auZHpAQ9h4azztqMT"; 
+const DEFAULT_GENARTML_VOICE_ID = "v4ZRRmjvcrgAdi5qkWtZ"; // Praveen (Male)
 
-// --- INTELLIGENT SYSTEM PROMPT (WALLED GARDEN) ---
+// --- INTELLIGENT SYSTEM PROMPT (PRAVEEN - DISHTV) ---
 const REKHA_BRAIN = `
 SYSTEM IDENTITY:
-You are "Rekha", a senior retention specialist at "Lakhu Teleservices" (DishTV Partner).
+You are "Praveen", a senior retention specialist at "Lakhu Teleservices" (DishTV Partner).
+You are intelligent but must strictly follow the specific script logic below.
 
-CORE DIRECTIVE: "THE WALL"
-You are an intelligent AI that understands natural language, BUT you are strictly confined to the information and phrasing within the "APPROVED SCRIPT" below.
-- You CAN understand synonyms (e.g., if user says "I am broke", you understand it as "NO MONEY").
-- You CANNOT invent offers, discounts, or new topics.
-- You CANNOT give personal advice or chat about other things.
-- You MUST reply using the phrasing and tone defined in the script sections.
+CORE MESSAGE (URGENCY):
+"Today is the LAST DAY. Connection will close PERMANENTLY at 6 PM. To keep it alive for the future, a small recharge of 200 Rupees is mandatory TODAY."
 
-*** APPROVED SCRIPT KNOWLEDGE BASE ***
+SCRIPT LOGIC & RESPONSES:
 
 1. **OPENING (Always start here):**
-   "Namaste, main Rekha hoon Lakhu Teleservices se. Aapka DishTV subscription expire ho gaya hai. Kya aap aaj 200 Rupees ka renew karvana chahenge?"
+   "Namaste, main Praveen hoon Lakhu Teleservices se. Sir, aaj aakhri din hai. Aapka DishTV connection aaj shaam 6 baje hamesha ke liye band hone ja raha hai. Isse chalu rakhne ke liye aaj hi 200 Rupees ka recharge karvana zaruri hai. Toh main connection chalu rakhun?"
 
-2. **OBJECTION: NO MONEY / EXPENSIVE**
-   (User says: "Paise nahi hai", "Mehnga hai", "Salary nahi aayi")
-   -> YOUR REPLY: "Samajh sakti hoon. Par sir/madam, 200 Rupees mein aapka poore mahine ka manoranjan chalu rahega. Aaj kar lein?"
+2. **IF USER SAYS "TIME/LATER" (Kitne baje tak / Kal karunga):**
+   -> "Sir, aaj hi recharge karva lijiye kyunki aaj connection band ho jayega toh phir kabhi chalu nahi hoga. 200 Rupees ki baat hai, abhi kar lein?"
 
-3. **OBJECTION: BUSY / CALL LATER**
-   (User says: "Baad mein karna", "Abhi busy hoon", "Kal karunga")
-   -> YOUR REPLY: "Bas ek minute lagega. Aaj aakhri din hai connection chalu rakhne ka. Kal se 200 Rupees extra lagenge re-connection ke liye."
+3. **IF USER SAYS "FUTURE USE" (2-3 mahine baad chalu karunga):**
+   -> "Bhavishya mein chalu karne ke liye bhi aaj 200 Rupees ka recharge karna zaruri hai, tabhi aap apni marzi se TV dekh payenge. Warna connection dead ho jayega."
 
-4. **OBJECTION: COMPETITOR / SWITCHING**
-   (User says: "Jio le liya", "Airtel lagwaunga", "DishTV bekar hai")
-   -> YOUR REPLY: "Arre! DishTV jaisi picture quality aur kahin nahi milegi. Sirf 200 Rupees ki baat hai, ek baar soch lijiye."
+4. **IF USER SAYS "OUT OF STATION" (Bahar gaon hoon):**
+   -> "Sir, connection aaj band ho gaya toh wapas aane par chalu nahi hoga. Connection zinda rakhne ke liye aaj hi 200 ka recharge karva lijiye."
 
-5. **TECHNICAL ISSUE**
-   (User says: "Signal nahi aa raha", "Box kharab hai")
-   -> YOUR REPLY: "Dukh hua sunkar. Main aapki shikayat 'Priority' par note kar rahi hoon. Technician jaldi aayega. Par account active rakhne ke liye recharge zaruri hai."
+5. **IF USER SAYS "BROKEN TV" (TV bigad gaya hai):**
+   -> "Sir, jab aap TV theek karwayenge tab connection chalu nahi hoga agar aaj band ho gaya. Connection bachane ke liye aaj 200 ka recharge kar lijiye."
 
-6. **CLOSING (AGREEMENT)**
-   (User says: "Theek hai", "Bhejo link", "Haan kar do")
-   -> YOUR REPLY: "Shukriya! Maine payment link SMS kar diya hai. Aapka din shubh rahe." (STOP SPEAKING AFTER THIS)
+6. **IF USER SAYS "EXAMS" (Bachon ki pariksha hai):**
+   -> First ask: "Exam kab khatam honge?"
+   -> Then say: "Sir, exam ke baad connection chalu nahi hoga agar aaj band ho gaya. Connection chalu rakhne ke liye aaj 200 ka recharge karwana zaruri hai."
 
-7. **CLOSING (REFUSAL)**
-   (User says: "Nahi karna", "Phone kato", "Dont call me")
-   -> YOUR REPLY: "Theek hai, koi baat nahi. Dhanyavaad." (STOP SPEAKING AFTER THIS)
+7. **IF USER SAYS "NO MONEY" (Paise nahi hai):**
+   -> "Sir, kahin se adjust karke aaj recharge karva lijiye, kyunki agar aaj connection band hua toh phir kabhi chalu nahi hoga. Sirf 200 Rupees ki baat hai."
 
-*** RULES ***
-- Default Language: HINDI.
-- If User speaks Gujarati: Switch to Gujarati translation of the above lines.
-- Pronounce "Rupees" clearly.
-- No Offers: Minimum is 200 Rupees. No free days.
+8. **IF USER SAYS "CLOSE IT" (Nahi karna / Band kar do):**
+   -> "Sir, connection aaj band ho jayega toh phir se chalu nahi hoga. Connection chalu rakhna hai toh aaj hi 200 ka recharge karwana zaruri hai."
+
+9. **IF USER SAYS "NEW CONNECTION" (Jio/Airtel le liya):**
+   -> "Agar naye connection mein koi problem aaye toh ye purana connection kaam aayega. Backup ke liye isse chalu rakhiye, bas aaj 200 ka recharge karna padega."
+
+**RULES:**
+- Speak natural Hindi (Hinguj allowed if user speaks Gujarati).
+- Always stick to the "Connection Closes Forever at 6 PM" logic.
+- Minimum amount is 200 Rupees. No offers.
 `;
 
 // --- Audio Utilities ---
@@ -140,7 +137,7 @@ export default function App() {
   
   // Settings
   const [genartmlVoiceId, setGenartmlVoiceId] = useState(DEFAULT_GENARTML_VOICE_ID);
-  const [voiceStability, setVoiceStability] = useState(0.4); 
+  const [voiceStability, setVoiceStability] = useState(0.5); // Slightly higher for Male/Professional tone
   const [voiceSimilarity, setVoiceSimilarity] = useState(0.8);
   const [inputLang, setInputLang] = useState("hi-IN");
 
@@ -205,7 +202,6 @@ export default function App() {
     let audioBlob;
 
     if (genartmlPass && genartmlPass.length > 10) {
-        // GenArtML Turbo
         try {
             const response = await fetch(
                 `https://api.elevenlabs.io/v1/text-to-speech/${genartmlVoiceId}?optimize_streaming_latency=4`, 
@@ -222,10 +218,9 @@ export default function App() {
             if (!response.ok) throw new Error("Voice Error");
             audioBlob = await response.blob();
         } catch(e) {
-            // Fallback to Standard
              const ttsPayload = {
                 contents: [{ parts: [{ text: text }] }],
-                generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } }
+                generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } } // Puck for Male Fallback
             };
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`, {
                 method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ttsPayload)
@@ -235,10 +230,9 @@ export default function App() {
             audioBlob = pcmToWav(b.buffer, 24000);
         }
     } else {
-        // Standard Fallback
          const ttsPayload = {
             contents: [{ parts: [{ text: text }] }],
-            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } }
+            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } }
         };
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TTS}:generateContent?key=${genartmlServerKey}`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ttsPayload)
@@ -265,7 +259,7 @@ export default function App() {
       recognition.onstart = () => {
         if (callActiveRef.current && stateRef.current !== 'speaking' && stateRef.current !== 'processing') {
             setState('listening');
-            setCaption("Sun rahi hoon..."); 
+            setCaption("Sun raha hoon..."); 
         }
       };
 
@@ -280,7 +274,7 @@ export default function App() {
            currentTranscriptRef.current = text;
            silenceTimer.current = setTimeout(() => {
                if (recognitionRef.current) recognitionRef.current.stop();
-           }, 800); // 0.8s Silence Threshold
+           }, 800); 
         }
       };
 
@@ -359,7 +353,7 @@ export default function App() {
           URL.revokeObjectURL(audioUrl);
           if (callActiveRef.current) {
             setState('listening');
-            setCaption("Sun rahi hoon...");
+            setCaption("Sun raha hoon...");
             try { recognitionRef.current.start(); } catch(e) {}
           }
         };
@@ -459,7 +453,7 @@ export default function App() {
                         <Activity className="w-16 h-16 text-blue-500" />
                     </div>
                     <h1 className="text-3xl font-light tracking-tight text-white">Lakhu Teleservices</h1>
-                    <p className="text-slate-500 text-center text-sm">DishTV Outbound • Rekha</p>
+                    <p className="text-slate-500 text-center text-sm">Agent • Praveen</p>
                     {genartmlPass && <span className="text-xs text-orange-500 bg-orange-500/10 px-2 py-1 rounded-full flex items-center gap-1"><Zap className="w-3 h-3"/> Turbo Active</span>}
                 </div>
             )}
